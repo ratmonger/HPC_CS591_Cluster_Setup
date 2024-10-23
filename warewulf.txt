@@ -1,0 +1,263 @@
+
+References:
+https://fricke.co.uk/Teaching/CS491_591_HPC_2024_Fall/Lectures/Lecture_15-Warewulf.pdf
+https://fricke.co.uk/Teaching/CS491_591_HPC_2024_Fall/Lectures/Lecture_6-HPC_Networking.pdf
+
+Pay attention to the user and directory in each command. 
+You may copy and paste entire commands lists when they follow the same user and directory heading.
+
+If you have previously connected to your compute node and wipe it, you may incur ssh key warnings.
+To relieve the warnings should you observe them:
+[root@headnode ~]# rm .ssh/known_hosts
+[root@headnode ~]# rm .ssh/known_hosts.old
+
+This assumes one has done everything expected before Warewulf lecture slides.
+
+Begin: sudo -i
+
+[root@headnode ~]# nmtui
+Edit a connection // press enter
+eno2 // press enter, select the 2nd option under Ethernet
+IPv4 Configuration: <Manual>
+Addresses: 10.0.0.1/16
+Gateway: 129.24.245.X   // where X is your team or cluster number
+Never use this network for default route // press space to add 'X' mark
+Automatically connect // press space
+Available to all users // press space
+// leave all other options unselected
+<OK>  // press enter
+<Back> // press enter
+Activate a connection // press enter
+eno2 // press enter.  If activated correctly, it should display <Deactivate> on the right along with a * next to eno2.
+<Back> // press enter
+<Ok> // press enter
+
+
+[root@headnode ~]# sudo -i
+
+COMMAND LIST:
+yum groupinstall "Development Tools"
+yum install epel-release
+yum config-manager --set-enabled crb
+yum install golang tftp-server dhcp-server nfs-utils gpgme-devel libassuan-devel ipxe-bootimgs
+
+
+// It's warewulf time!
+
+[root@headnode ~]# sudo -i
+
+// with CAUTION delete ALL warewulf remnants
+[root@headnode ~]# find / -type d -name "warewulf" -exec rm -r {} +
+[root@headnode ~]# rm -r -f /usr/local/bin/wwctl
+
+// Download Warewulf
+[root@headnode ~]# git clone https://github.com/hpcng/warewulf.git
+
+COMMAND LIST:
+cd warewulf
+git checkout tags/v4.5.8
+make clean defaults \ PREFIX=/usr \ BINDIR=/usr/bin \ SYSCONFDIR=/etc \ DATADIR=/usr/share \ LOCALSTATEDIR=/var/lib \ SHAREDSTATEDIR=/var/lib \ MANDIR=/usr/share/man \ INFODIR=/usr/share/info \ DOCDIR=/usr/share/doc \ SRVDIR=/var/lib \ TFTPDIR=/var/lib/tftpboot \ SYSTEMDDIR=/usr/lib/systemd/system \ BASHCOMPDIR=/etc/bash_completion.d/ \ FIREWALLDDIR=/usr/lib/firewalld/services \ WWCLIENTDIR=/warewulf
+make all
+make install
+systemctl enable --now warewulfd
+wwctl configure dhcp
+wwctl configure tftp
+wwctl configure nfs
+wwctl configure ssh
+cd ~
+wwctl container import docker://ghcr.io/hpcng/warewulf-rockylinux:9 rocky-9
+wwctl container syncuser --write rocky-9 --build 
+wwctl profile set --yes --container rocky-9 "default"
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Set "SELINUX=disabled" in /etc/selinux/config   // use your favorite linux text editor (vi, nano, emacs)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+[root@headnode ~]# reboot
+
+// You can ping your server while you wait!
+
+[root@headnode ~]# sudo -i
+
+[root@headnode ~]# restorecon -Rv /var/lib/tftpboot/
+
+
+Compute Node Setup:
+
+[root@headnode ~]$ sysctl -w net.ipv4.ip_forward=1 
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Edit /etc/sysctl.conf to add "net.ipv4.ip_forward = 1" as the very last line without quotes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+COMMAND LIST:
+sysctl -p
+firewall-cmd --zone=external --add-interface=eno1 --permanent 
+firewall-cmd --zone=internal --add-interface=eno2 --permanent
+firewall-cmd --set-default-zone=external
+firewall-cmd --delete-policy internal-external --permanent
+firewall-cmd --reload
+firewall-cmd --new-policy internal-external --permanent
+firewall-cmd --policy internal-external --add-ingress-zone=internal --permanent
+firewall-cmd --policy internal-external --add-egress-zone=external --permanent
+firewall-cmd --policy internal-external --set-target=ACCEPT --permanent
+firewall-cmd --info-zone external
+firewall-cmd --zone internal --add-service warewulf --permanent 
+firewall-cmd --zone internal --add-service nfs --permanent
+firewall-cmd --zone internal --add-service tftp --permanent
+firewall-cmd --zone internal --add-service dhcp --permanent 
+firewall-cmd --reload
+
+
+Logon to your COMPUTE NODE iDRAC.
+https://129.24.245.XX/login.html    // change the XX's
+
+On iDRAC website, navigate to:
+1 Overview>Server>Setup>First Boot Device>PXE
+2 Uncheck Boot Once
+3 Click 'Apply'
+4 Overview>Server> Power On/Off 
+5. Wait for Power State to indicate 'Off'
+6. Overview>Server> Power On/Off
+
+Now lets find your MAC address!!!
+On iDRAC website, navigate to:
+1 Overview>Hardware>Network Devices>First Boot Device>Integrated NIC 1>UP>MAC Addresses
+// Should look something like: D4:AE:52:A3:12:F2
+2 Save this MAC address somewhere, write it down! You will use it.
+
+
+======================================================================
+
+Modify the Hosts file for hostname resolution, replace the **WORDS** with proper hostnames
+
+cat /etc/hosts
+
+
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+# Do not edit after this line
+# This block is autogenerated by warewulf
+# Host:   mordor
+# Time:   10-23-2024 02:20:38 CDT
+# Source: /var/lib/warewulf/overlays/host/rootfs/etc/hosts.ww
+
+
+# Warewulf Server
+10.0.0.1 **HEAD** warewulf
+10.0.0.2 **COMPUTE** **COMPUTE**-default **COMPUTE**-eno1
+
+======================================================================
+// REPLACE THE 4 **WORDS** with the correct input!!! WATCH OUT!!!
+// I assume eno1 and ib0 are the network interface names on the compute node
+
+
+[root@headnode ~]# wwctl profile set --yes --container=rocky-9 --netdev eno1 --netmask 255.255.0.0 --gateway 10.0.0.1 "default"
+
+[root@headnode ~]# wwctl profile set --netdev ib0 --netmask 255.255.0.0 --netname=ib0 --type=InfiniBand "default"
+
+[root@headnode ~]# wwctl node add --hwaddr **MAC_ADDRESS** --ipaddr 10.0.0.2  **COMPUTE_NODE**
+
+[root@headnode ~]# wwctl node set --yes --netdev ib0 --ipaddr 192.168.1.**TEAM ID**  --netname=ib0 **COMPUTE_NODE**
+
+======================================================================
+
+[root@headnode ~]# cd /var/lib/warewulf/overlays/wwinit/rootfs/etc
+
+[root@headnode etc]# mv resolv.conf.ww resolve.conf.ww.backup
+
+[root@headnode etc]# wwctl overlay import wwinit /etc/resolv.conf
+
+[root@headnode etc]# cd ~/warewulf/
+
+[root@headnode warewulf]# wwctl overlay build
+
+======================================================================
+Now SSH onto your compute node. You can use 'ssh 10.0.0.2' 
+Then type: reboot
+
+    OR if the compute node SSH is unavailable:
+
+Logon to your COMPUTE NODE iDRAC.
+https://129.24.245.XX/login.html // where XX is your compute node number
+
+On iDRAC website, navigate to:
+1 Overview>Server>Setup>First Boot Device>PXE
+2 Uncheck Boot Once
+3 Click 'Apply'
+4 Overview>Server> Power On/Off 
+5. Wait for Power State to indicate 'Off'
+6. Overview>Server> Power On/Off
+
+======================================================================
+
+[root@headnode warewulf] cd ~
+
+[root@headnode]# ping **COMPUTE_NODE** // ping your compute node waiting for boot
+
+// You can also visit your compute node's iDRAC and spectate the terminal!
+
+[root@headnode ~]# ssh 10.0.0.2
+
+[root@computenode ~]# ping google.com 
+
+// Time to enable Infiniband on Head Node!
+// This uses the networking lecture slides, the very last slides!
+
+[root@headnode ~]# sudo yum install rdma-core libibverbs-utils librdmacm librdmacm-utils ibacm infiniband-diags opensm
+
+[root@headnode ~]# sudo reboot now
+
+[root@headnode ~]# sudo -i
+[root@headnode ~]# systemctl stop opensm
+[root@headnode ~]# systemctl disable opensm
+
+[root@headnode ~]# ibstat // Should SM lid = 0?
+~~~Also copy down the port GUID hex value~~~
+
+[root@headnode ~]# sudo iblinkinfo  // can you see the other servers using infiniband? the beacons are lit!
+
+Now we start a server and client test. That means open another terminal!
+Server:
+[root@headnode ~]$ ibping -S
+
+Client:
+[root@headnode ~]$ ibping -G **GUID hex Value** // replace **TEXT** here!!!
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+On head node, use nmtui to enable Infiniband, Warewulf slide 117
+
+BUT set the ip address to Head node: 192.168.0.TeamID
+
+do NOT add a gateway
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+[root@headnode]# firewall-cmd --zone=internal --add-interface=ibp65s0 --permanent
+
+[root@headnode ~]$ sudo wwctl container shell rocky-9
+[rocky-9|discard] Warewulf> yum install rdma-core libibverbs-utils librdmacm librdmacm-utils ibacm infiniband-diags
+[rocky-9|write] Warewulf> true
+[rocky-9|write] Warewulf> exit
+
+[root@headnode ~]$ wwctl overlay build
+
+
+[root@headnode]# ssh 10.0.0.2  // or use idrac to reboot
+
+[root@computenode]# reboot
+
+======================================================================
+TODO:
+
+iperf testing
+modify root/password on compute node (slide 98 root passwd and overlay build and reboot)
+add users + passwords to compute node
+more detail in the last set of instructions
+
+======================================================================
+NOTE: if you manually change the nodes.conf file using a text editor,
+run the following commands after saving the file.
+
+[root@headnode ~]$ sudo systemctl restart warewulfd
+[root@headnode ~]$ sudo wwctl overlay build
+=======================================================================
