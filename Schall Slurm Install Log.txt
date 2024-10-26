@@ -1,0 +1,154 @@
+﻿Slide 10 - ran yum “search munge” and “sudo yum install munge munge-devel” with no issue
+
+
+Slide 10 - ran “getent passwd munge”, got “munge:x:987:985:” instead of “munge:x:987:987” like in the slides 
+
+
+Slide 11 - ran “sudo create-munge-key” and “sudo ls /etc/munge” with no issues
+
+
+Slide 12 - ran “sudo systemctl enable munge” with no issues 
+
+
+Slide 12-16 - “ran sudo systemctl edit munge” added line PIDFile=/var/run/munged.pid, then saved it with ^O and enter, then exited with ^X, in the slides this is done in vim but in ssh it’s in nano by default
+
+
+Slide 17 - “ran sudo systemctl restart munge” and “sudo systemctl status munge” with no issue, some values were different but I assume these are to be expected with a different system.
+
+
+Slide 18 - ran “sudo -i” and “wwctl container exec rocky-9 /bin/bash” instead of ”[rocky-9] Warewulf>” “[rocky-9|write] Warewulf>” assuming there is no real difference
+
+
+Slide 18 - ran “yum install munge” and “systemctl enable munge” and “exit” received,
+
+
+ “WARN   : /etc/passwd has been modified, maybe you want to run syncuser
+and
+WARN   : /etc/group has been modified, maybe you want to run syncuser” 
+
+
+But other than that there were no issues
+
+
+Slide 19 - ran “wwctl overlay import --parents wwinit /etc/munge/munge.key” with no issues
+
+
+Slide 20 - ran “wwctl overlay import --parents wwinit /usr/lib/systemd/system/munge.service” and “file /var/lib/warewulf/overlays/wwinit/rootfs/usr/lib/systemd/system” then ran “file /var/lib/warewulf/overlays/wwinit/rootfs/usr/lib/systemd/system/” just to be safe and match the slides
+
+
+Slide 21 - ran “wwctl overlay chown wwinit /etc/munge/munge.key $(id -u munge) $(id -g munge) and “wwctl overlay chmod wwinit /etc/munge/munge.key 0400” and “wwctl overlay chown wwinit /etc/munge $(id -u munge) $(id -g munge)” and “wwctl overlay chmod wwinit /etc/munge 0700” and “wwctl overlay chmod wwinit /usr 0755”
+
+
+Accidentally ran
+“wwctl overlay chown wwinit /etc/munge/munge.key 0400” instead of 
+““wwctl overlay chmod wwinit /etc/munge/munge.key 0400”
+
+
+So i went back and ran the correct command, will this cause issues?
+Slide 22 - ran “wwctl overlay build” with no issue
+
+
+Slide 23 - ran “chown -R munge: /etc/munge/ /var/log/munge /var/lib/munge/ /run/munge/” and “chmod 0700 /etc/munge/ /var/log/munge/ /var/lib/munge” “chmod 0711 \var\run\munge” with no issues
+
+
+Slide 24 - sshed into gondor and ran “rebot” with no issues
+
+
+Slide 25 - ran “systemctl enable munge” with no issues
+
+
+Slide 26 - ran “munge -n” and “munge -n | unmunge” with no issues. “munge -n | ssh gondor” returned the error
+“ssh: connect to host gondor port 22: No route to host”
+
+
+Continuing from Slide 27 due to error
+
+
+Slide 27 - ran “sudo timedatectl set-timezone America/Denver”, “wwctl overlay import wwinit /etc/localtime”, “yum install chrony” (already installed), “ststemctl enable chronyd”, and wwctl overlay build” without issue
+
+
+Slide 28 - ran “systemctl status chronyd” without issue
+
+
+Slide 29 - ran all commands without issue, the group and user were already created.
+
+
+Slide 30 - ran all commands without issue
+
+
+Slide 31 - slides show user not sudo -i root running commands but doing so under user causes permission denied so ran under sudo -i instead
+
+
+Slide 32 - ran all commands with no issue, mariadb was already installed
+
+
+Slide 34 - issue running “sudo yum install mariadb-devel munge-devel pam-devel readlinedevel perl dbus-devel” sudo not found. Mostlikely error and needs to run on the head node
+
+
+Bryce and I unknowingly both did slides 40-49 concurrently which accounts for why some things were already downloaded or enabled
+
+
+Slide 40 - ran “wget https://download.schedmd.com/slurm/slurm-23.11.5.tar.bz2” and “> yum install rpm-build” and “rpmbuild -ta slurm-23.11.5.tar.bz2” and “ cd /root/rpmbuild/RPMS/x86_64/” in the warewulf container with no issue
+
+
+Slide 41 - ran “yum localinstall slurm-23.11.5-1.el9.x86_64.rpm slurm-slurmd-23.11.5-1.el9.x86_64.rpm” with no issue
+
+
+Installed to same directory as /root/rpmbuild/RPMS/x86_64/ 
+
+
+Slide 42 - slide doesn’t say but you need to cd ~ to the root
+Ran “rm -rf rpmbuild” without issue. “Systemctl enable slurmd” before exit unlike in the slides where it’s after for some reason
+
+
+The slides have 35 files removed, when i exited it removed 53
+
+
+Slide 43 - ran “mkdir /var/spool/slurmctld” and “chown slurm:slurm /var/spool/slurmctld” without any issue
+
+
+Slide 44 - “cp slurm.conf.example slurm.conf” returned “cp: overwrite 'slurm.conf'?” not found in the slides. I responded “y”. Ran “cp slurmdbd.conf.example slurmdbd.conf” with no issue no prompt came up
+
+
+Slide 45 - running “emacs slurm.conf” give a different file saying it’s an example slurmdbd file but “emacs slurm.conf.example” shows the correct file “added ClusterName=mordor, SlurmctldHost=mordor, SlurmdDebug=debug, DebugFlags=cgroup”
+
+
+Slide 47 - “firewall-cmd --permanent --zone=internal --add-port=6817/tcp” and “firewall-cmd --permanent --zone=internal --add-port=6819/tcp” both gave the warnings “Warning: ALREADY_ENABLED: 6817:tcp” “Warning: ALREADY_ENABLED: 6819:tcp” but still returned success along with “firewall-cmd --relead”
+
+
+Slide 48 - “systemctl enable --now slurmctld” initially returned the error “Job for slurmctld.service failed because the control process exited with error code.
+See "systemctl status slurmctld.service" and "journalctl -xeu slurmctld.service" for details.
+”.
+
+
+When running the given command there was an error reading the conf file.
+
+
+After running “systemctl enable --now slurmctld” again nothing was returned, neither an error, or the created symlink from the slides. Most likely still an error 
+
+
+Slide 49 - “systemctl status slurmctld” does say slurm is active but there are more errors than in the slides 
+
+
+The errors seem to have been caused by my writing “cp slurmdbd.conf.example slurm.conf” by example overriding the slurm.conf with slurmdbd.conf, this had to be reverted
+
+
+Slide 67 - we weren’t sure if we needed to run the commands on 67 as dbus-devel seemed to already be installed but decided to run “sudo yum install dbus-deve”, “rm –rf rpmbuild”, “$ sudo yum remove slurm-* ”, “rpmbuild -ta slurm-23.11.5.tar.bz2”, “ cd /home/matthew/rpmbuild/RPMS/x86_64” just to be safe. No issues
+
+
+Slide 70 - run “sudo systemctl list-unit-files | grep slurm”, slurmstepd.scope transient - was absent but this seems to only appear when running a job so it isn’t an issue, “sudo systemctl enable --now slurmctld” ran without issue
+
+
+Slide 71 - ran “nmtui”, edit a connection, then added the new address 10.0.0.3\16 to Internal. No issues
+
+
+Slide 72 - slides just show cat /etc/hosts, but don’t mention that it’s necessary edit the file adding the line “10.0.0.3 baraddur” above the do not edit line
+
+
+Slide 73 - similar deal with slide 72 where the slides show “cat /etc/hostname” but not that the file needs to be edited to replace hostname with the new one added in the previous slide. Otherwise “slurmd -C” worked without issue after a small time to update
+
+
+Slide 76 - after some issues were ironed out by Bryce, “sinfo” now properly returns 2 nodes
+
+
+Slide 77 - similar to the last slide after Bryce bebugged some issues related host name and recognition “ sbatch -w isengard test.slurm”, “cat slurm-32.out”, “sbatch -w baraddur test.slurm”, and “cat slurm-33.out” all worked without issue
